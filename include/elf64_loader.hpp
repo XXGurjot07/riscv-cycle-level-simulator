@@ -35,14 +35,70 @@ struct Elf64_Phdr {
     uint64_t p_memsz;       // bytes in memory; the extra is .bss and must be zeroed
     uint64_t p_align;
 };
+struct Elf64_Shdr {
+    uint32_t sh_name;       // offset of the section's name in the section-name string table
+    uint32_t sh_type;       // 2 = SHT_SYMTAB (symbol table)
+    uint64_t sh_flags;
+    uint64_t sh_addr;
+    uint64_t sh_offset;     // where the section's bytes start in the file
+    uint64_t sh_size;
+    uint32_t sh_link;       // for a symbol table: index of its string table (symbol names)
+    uint32_t sh_info;
+    uint64_t sh_addralign;
+    uint64_t sh_entsize;    // size of one entry (24 for a symbol)
+};
+struct Elf64_Sym {
+    uint32_t st_name;       // offset of the symbol's name in the linked string table
+    uint8_t  st_info;
+    uint8_t  st_other;
+    uint16_t st_shndx;
+    uint64_t st_value;      // the symbol's address
+    uint64_t st_size;
+};
 static_assert(sizeof(Elf64_Ehdr) == 64 && sizeof(Elf64_Phdr) == 56, "structs must match the file layout");
+static_assert(sizeof(Elf64_Shdr) == 64 && sizeof(Elf64_Sym) == 24, "structs must match the file layout");
+
+inline std::vector<uint8_t> read_file(const std::string& path) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) throw std::runtime_error("cannot open " + path);
+    return std::vector<uint8_t>((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+}
+
+// Returns the address of symbol `name` (e.g. "tohost"), or 0 if the ELF has no such symbol.
+inline uint64_t elf64_symbol(const std::string& path, const char* name) {
+    std::vector<uint8_t> file = read_file(path);
+    Elf64_Ehdr eh;
+    if (file.size() < sizeof eh) return 0;
+    std::memcpy(&eh, file.data(), sizeof eh);
+
+    auto section = [&](uint32_t i, Elf64_Shdr& sh) {
+        uint64_t at = eh.e_shoff + (uint64_t)i * eh.e_shentsize;
+        if (i >= eh.e_shnum || at > file.size() || file.size() - at < sizeof sh) return false;
+        std::memcpy(&sh, file.data() + at, sizeof sh);
+        return sh.sh_offset <= file.size() && file.size() - sh.sh_offset >= sh.sh_size;
+    };
+
+    for (uint32_t i = 0; i < eh.e_shnum; i++) {
+        Elf64_Shdr symtab, strtab;
+        if (!section(i, symtab) || symtab.sh_type != 2) continue;     // only the symbol table
+        if (!section(symtab.sh_link, strtab)) continue;
+
+        for (uint64_t at = 0; at + sizeof(Elf64_Sym) <= symtab.sh_size; at += sizeof(Elf64_Sym)) {
+            Elf64_Sym s;
+            std::memcpy(&s, file.data() + symtab.sh_offset + at, sizeof s);
+            if (s.st_name >= strtab.sh_size) continue;
+            const char* sym = (const char*)file.data() + strtab.sh_offset + s.st_name;
+            size_t max_len  = strtab.sh_size - s.st_name;              // names must end inside the table
+            if (std::memchr(sym, 0, max_len) && std::strcmp(sym, name) == 0) return s.st_value;
+        }
+    }
+    return 0;
+}
 
 // Copies every PT_LOAD segment at guest address [base, base + mem_size) into mem[0 .. mem_size)
 // and returns the entry point. Throws on bad input.
 inline uint64_t load_elf64(const std::string& path, uint8_t* mem, size_t mem_size, uint64_t base) {
-    std::ifstream f(path, std::ios::binary);
-    if (!f) throw std::runtime_error("cannot open " + path);
-    std::vector<uint8_t> file((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    std::vector<uint8_t> file = read_file(path);
 
     Elf64_Ehdr eh;
     if (file.size() < sizeof eh) throw std::runtime_error("too small to be an ELF64 file");

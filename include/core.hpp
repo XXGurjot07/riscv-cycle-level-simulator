@@ -20,6 +20,8 @@ class Core{
 
         arch_state regs_;                 // architectural state (register file + retired pc)
         uint64_t   pc_;                   // fetch pc (speculative)
+        uint64_t   to_host_;              // address of tohost symbol
+        int        exit_code_ = 0;        // exit code to return to main
 
         Core_HPM_Stats stats_;
 
@@ -37,10 +39,11 @@ class Core{
         bool halted_ = false;
 
     public :
-        Core(uint8_t* mem, uint64_t entry_pc, const SimConfig& cfg);
+        Core(uint8_t* mem, uint64_t entry_pc, const SimConfig& cfg, uint64_t to_host);  // constructor
         bool tick();        // one clock cycle; returns false once halted
         void run();         // tick until halted or the cycle limit
 
+        int  exit_code() const { return exit_code_; }
         bool halted()  const { return halted_; }
         const Core_HPM_Stats& stats() const { return stats_; }
         const arch_state& regs() const { return regs_;   }   

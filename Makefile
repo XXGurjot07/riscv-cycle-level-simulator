@@ -22,7 +22,7 @@ programs/prog.elf: programs/start.S programs/prog.cpp programs/link.ld
 	$(RV_CC) $(RV_FLAGS) programs/start.S programs/prog.cpp -o $@
 
 # Same program, linked for Spike: RAM at 0x80000000, exit through tohost (exit code = main's return)
-SPIKE ?= $(HOME)/riscv_sim/riscv-isa-sim/build/spike
+SPIKE ?= spike
 
 programs/spike/prog.elf: programs/spike/start.S programs/prog.cpp programs/spike/link.ld
 	$(RV_CC) $(RV_ARCH) -T programs/spike/link.ld programs/spike/start.S programs/prog.cpp -o $@
@@ -31,7 +31,12 @@ spike: programs/spike/prog.elf
 	$(SPIKE) --isa=rv64i -l --log-commits $< 2> programs/spike/prog.log; echo "spike exit code (= a0): $$?"
 	grep -E '^core +0: 3 0x00000000800' programs/spike/prog.log | uniq | head -40
 
+# Lockstep check: same ELF on Spike and on our sim, commit logs must match up to the tohost store
+check: sim programs/prog.elf
+	python3 tools/cosim.py programs/prog.elf --sim ./sim --spike $(SPIKE)
+
 clean:
 	rm -f sim sim.exe programs/*.elf programs/spike/*.elf programs/spike/*.log
+	rm -rf cosim_out
 
-.PHONY: programs spike clean
+.PHONY: programs spike check clean

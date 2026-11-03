@@ -25,6 +25,26 @@ void log_commit(uint64_t cycle, const retired_Res& wb){
         std::printf("%8llu  0x%08llx\n", (unsigned long long)cycle, (unsigned long long)wb.pc);
 }
 
+// Same format as `spike -l --log-commits`, so tools/cosim.py can diff the two line by line
+void log_commit_spike(const retired_Res& wb){
+    std::printf("core   0: 3 0x%016llx (0x%08x)", (unsigned long long)wb.pc, (unsigned)wb.instruction);
+
+    if (wb.writes_rd && wb.rd != 0)                       // Spike never prints writes to x0
+        std::printf(" x%-2u 0x%016llx", (unsigned)wb.rd, (unsigned long long)wb.rd_data);
+
+    if (wb.is_load)
+        std::printf(" mem 0x%016llx", (unsigned long long)wb.mem_addr);
+
+    if (wb.is_store) {
+        // only the stored bytes, printed at the store's width (sb = 2 hex digits ... sd = 16)
+        uint64_t mask = (wb.mem_bytes >= 8) ? ~0ull : ((1ull << (8 * wb.mem_bytes)) - 1);
+        std::printf(" mem 0x%016llx 0x%0*llx", (unsigned long long)wb.mem_addr,
+                    2 * wb.mem_bytes, (unsigned long long)(wb.mem_data & mask));
+    }
+
+    std::printf("\n");
+}
+
 void log_header(){
     std::printf("   cycle  pc          rd   value\n");
 }

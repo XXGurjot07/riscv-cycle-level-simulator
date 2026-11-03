@@ -8,4 +8,5 @@
 // Logging helpers
 void log_header();
 void log_commit(uint64_t cycle, const retired_Res& wb);
+void log_commit_spike(const retired_Res& wb);
 void log_trap(const retired_Res& wb);

@@ -12,23 +12,25 @@ int main(int argc, char** argv){
 
     // load elf
     uint64_t entry;
+    uint64_t to_host;
     try { 
         entry = load_elf64(cfg.benchmark_elf, memory.data(), memory.size(), MEM_BASE); 
+        to_host = elf64_symbol(cfg.benchmark_elf, "tohost");
     }
     catch (const std::exception& e) { 
         std::fprintf(stderr, "load failed: %s\n", e.what()); 
         return 2; 
     }
 
-    // always print cfg header
-    log_header();
-
     // core 0
-    Core core(memory.data(), entry, cfg);
+    Core core(memory.data(), entry, cfg, to_host);
 
+    if (cfg.log_on && !cfg.cosim){
+        log_header();
+    }
     // core 0 run
     core.run(); 
     core.stats().print(cfg);
 
-    return core.halted() ? 0 : 1;
+    return core.exit_code();
 }

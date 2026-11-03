@@ -15,6 +15,14 @@ retired_Res WritebackStage :: evaluate(arch_state& reg_file, const reg_MEM_WB& m
     reg.exc_val   = mem_wb_reg.exc_val;
     reg.valid     = mem_wb_reg.valid;
     reg.why       = mem_wb_reg.why;
+
+    // Spike Logging
+    reg.instruction = mem_wb_reg.instruction;
+    reg.is_load     = mem_wb_reg.is_load;
+    reg.is_store    = mem_wb_reg.is_store;
+    reg.mem_addr    = mem_wb_reg.mem_addr;
+    reg.mem_data    = mem_wb_reg.mem_data;
+    reg.mem_bytes   = mem_wb_reg.mem_bytes;
     
     if (!mem_wb_reg.valid){
         return reg;

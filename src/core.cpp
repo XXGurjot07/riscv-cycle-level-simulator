@@ -3,8 +3,8 @@
 #include "logging.hpp"
 
 // core initializer list
-Core::Core(uint8_t* mem, uint64_t entry_pc, const SimConfig& cfg) : cfg_(cfg), mem_(mem), 
-    pc_(entry_pc), fetch_(cfg.MEM_SIZE), memstage_(cfg.MEM_SIZE) {}      
+Core::Core(uint8_t* mem, uint64_t entry_pc, const SimConfig& cfg, uint64_t to_host) : cfg_(cfg), mem_(mem), 
+    pc_(entry_pc), to_host_(to_host), fetch_(cfg.MEM_SIZE), memstage_(cfg.MEM_SIZE) {}    
 
 bool Core::tick() {
     
@@ -17,8 +17,17 @@ bool Core::tick() {
     if (ret_result.retired){
         stats_.retired++;
         regs_.pc = ret_result.pc;
-        if(cfg_.log_on) 
+        if(cfg_.cosim)
+            log_commit_spike(ret_result);
+        else if(cfg_.log_on) 
             log_commit(stats_.cycles, ret_result);
+    }
+
+    if(ret_result.retired && ret_result.is_store && ret_result.mem_addr == to_host_){
+        halted_ = true;
+        exit_code_ = int(ret_result.mem_data >> 1);
+        stats_.cycles++;
+        return false;
     }
     
     if(ret_result.trap){

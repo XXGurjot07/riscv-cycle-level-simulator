@@ -12,6 +12,7 @@ struct SimConfig {
     const char* benchmark_elf = "programs/prog.elf";
 
     bool log_on     = true;
+    bool cosim      = false;
     bool forwarding = false;
 
     int  mul_latency   = 3;

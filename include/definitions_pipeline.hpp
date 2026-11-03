@@ -37,6 +37,8 @@ struct reg_ID_EX{
 
     Bubble_Why why = FILL;
     bool valid = false;
+
+    uint32_t instruction = 0; // for Spike logging
 };
 
 struct reg_EX_MEM{
@@ -61,6 +63,8 @@ struct reg_EX_MEM{
 
     Bubble_Why why = FILL;
     bool valid = false;
+
+    uint32_t instruction = 0; // for Spike logging
 };
 
 struct reg_EX_Ports{
@@ -80,6 +84,13 @@ struct reg_MEM_WB{
 
     Bubble_Why why = FILL;
     bool valid = false;
+
+    uint32_t instruction = 0;     // for Spike logging
+    bool     is_load     = false; // for Spike logging
+    bool     is_store    = false; // for Spike logging
+    uint64_t mem_addr    = 0;     // for Spike logging
+    uint64_t mem_data    = 0;     // for Spike logging
+    uint8_t  mem_bytes   = 0;     // for Spike logging
 };
 
 struct retired_Res{
@@ -97,4 +108,11 @@ struct retired_Res{
 
     Bubble_Why why = FILL;
     bool valid = false;
+
+    uint32_t instruction = 0;     // for Spike logging
+    bool     is_load     = false; // for Spike logging
+    bool     is_store    = false; // for Spike logging
+    uint64_t mem_addr    = 0;     // for Spike logging
+    uint64_t mem_data    = 0;     // for Spike logging
+    uint8_t  mem_bytes   = 0;     // for Spike logging
 };

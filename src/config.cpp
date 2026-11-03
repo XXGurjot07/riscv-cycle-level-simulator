@@ -12,6 +12,9 @@ SimConfig parse_args(int argc, char** argv){
         if(std::strcmp(arg, "-quiet") == 0){
             config_.log_on = false;
         }
+        else if(std::strcmp(arg, "-cosim") == 0){
+            config_.cosim = true;
+        }
         else if (std::strcmp(arg, "-forwarding") == 0){
             config_.forwarding = true;
         }

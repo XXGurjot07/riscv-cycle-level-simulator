@@ -106,6 +106,14 @@ reg_MEM_WB MemStage :: evaluate (uint8_t* mem, const reg_EX_MEM& ex_mem_reg){
     reg.valid     = ex_mem_reg.valid;
     reg.why       = ex_mem_reg.why;
 
+    // Spike Logging
+    reg.instruction = ex_mem_reg.instruction;
+    reg.is_load     = (futype == FUType::LOAD);
+    reg.is_store    = (futype == FUType::STORE);
+    reg.mem_addr    = ex_mem_reg.mem_addr;
+    reg.mem_data    = ex_mem_reg.mem_data;
+    reg.mem_bytes   = ex_mem_reg.mem_bytes;
+
     if (!ex_mem_reg.valid || ex_mem_reg.exc != Exception::NONE || !is_mem) {
         return reg;
     }

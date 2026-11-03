@@ -197,6 +197,7 @@ FU_Lane& ExecuteStage :: unit_for(const reg_ID_EX& id_ex_reg){
 reg_EX_MEM ExecuteStage :: build(const reg_ID_EX& id_ex_reg, ComputeFn compute) const {
     reg_EX_MEM reg;
     reg.pc = id_ex_reg.pc;
+    reg.instruction = id_ex_reg.instruction;
 
     if(id_ex_reg.exc != Exception::NONE){
         reg.exc     = id_ex_reg.exc;

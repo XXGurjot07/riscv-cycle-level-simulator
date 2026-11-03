@@ -327,6 +327,7 @@ reg_ID_EX DecodeStage::evaluate(const arch_state& regfile, const reg_IF_ID& if_i
 
     reg.pc  = if_id_reg.pc;
     reg.why = if_id_reg.why;
+    reg.instruction = if_id_reg.instruction;
 
     if(!if_id_reg.valid){
         reg.valid = false;
