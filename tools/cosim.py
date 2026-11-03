@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Lockstep check: run one ELF on Spike and on our sim, compare their commit logs line by line.
 
-usage: python3 tools/cosim.py programs/prog.elf [--sim ./sim] [--spike spike]
+usage: python3 tools/cosim.py programs/prog.elf [--sim ./sim] [--spike spike] [--sim-arg=-forwarding]
 PASS = identical commit logs up to (and including) the tohost store, and both exit codes 0.
 """
 import argparse
@@ -87,6 +87,7 @@ def main():
     ap.add_argument("elf")
     ap.add_argument("--sim", default="./sim")
     ap.add_argument("--spike", default="spike")
+    ap.add_argument("--sim-arg", action="append", default=[], help="extra option for our sim (repeatable)")
     ap.add_argument("--timeout", type=int, default=60)
     ap.add_argument("--out", default="cosim_out", help="directory for the two filtered logs")
     a = ap.parse_args()
@@ -98,7 +99,7 @@ def main():
         print("warning: no 'tohost' symbol; comparing full logs")
 
     spike_rc, _, spike_err = run([a.spike, "--isa=rv64i", "-l", "--log-commits", a.elf], a.timeout)
-    sim_rc, sim_out, _     = run([a.sim, a.elf, "-cosim"], a.timeout)
+    sim_rc, sim_out, _     = run([a.sim, a.elf, "-cosim", *a.sim_arg], a.timeout)
 
     ref, _         = commits(spike_err, tohost)          # Spike writes its log to stderr
     dut, sim_after = commits(sim_out, tohost)

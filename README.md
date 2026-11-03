@@ -66,4 +66,3 @@ Each row is the number of cycles that went to one cause:
 | `src/logging.cpp` | commit log, trap and bubble-cause names |
 | `include/elf64_loader.hpp` | loads ELF64 RISC-V programs into simulated memory |
 | `programs/` | bare-metal test program (`start.S`, `link.ld`, `prog.cpp`) |
-| `programs/spike/` | the same program linked for Spike (exits through `tohost`) |

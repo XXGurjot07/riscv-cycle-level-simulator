@@ -78,12 +78,46 @@ bool Core::tick() {
 
         // bubble cause - nop from ex
     }
-    else if(haz_raw_d1 || haz_raw_d2){
-        // dont advance pc and invalidate current id_ex
-        id_ex_ = {};
+    else if(haz_raw_d1 || haz_raw_d2 || haz_load_use){
+        if(cfg_.forwarding){
+        
+            // forwarding logic 
+            // load use stall is 1 bubble and done advance pc
+            if(haz_load_use){
+                id_ex_ = {};
 
-        // bubble cause - nop into ex
-        id_ex_.why = Bubble_Why :: RAW;
+                // bubble cause - load use
+                id_ex_.why = Bubble_Why :: LOAD_USE;
+            }
+            else{
+
+                id_ex_ = n_id_ex;
+                if_id_ = n_if_id;
+                pc_ += 4;
+
+                // forward path for rs1
+                if(haz_raw_d1 && id_ex_.deco_inst.rs1 == ex_mem_.rd){
+                    id_ex_.rs1_data = ex_mem_.rd_data;
+                }
+                else if(haz_raw_d2 && id_ex_.deco_inst.rs1 == mem_wb_.rd){
+                    id_ex_.rs1_data = mem_wb_.rd_data;
+                }
+
+                // forward path for rs2
+                if(haz_raw_d1 && id_ex_.deco_inst.rs2 == ex_mem_.rd){
+                    id_ex_.rs2_data = ex_mem_.rd_data;
+                }
+                else if(haz_raw_d2 && id_ex_.deco_inst.rs2 == mem_wb_.rd){
+                    id_ex_.rs2_data = mem_wb_.rd_data;
+                }
+            }
+        }
+        else{
+            id_ex_ = {};
+
+            // bubble cause - nop into ex
+            id_ex_.why = Bubble_Why :: RAW;
+        }
     }
     else{
         // if no hazards
