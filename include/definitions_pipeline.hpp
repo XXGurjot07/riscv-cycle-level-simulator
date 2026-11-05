@@ -76,6 +76,8 @@ struct reg_EX_Ports{
 struct reg_MEM_WB{
     uint64_t pc = 0;
 
+    FUType   fu_type = FUType::NONE;
+
     uint8_t  rd        = 0;
     uint64_t rd_data   = 0;
     bool     writes_rd = false;
@@ -96,6 +98,8 @@ struct reg_MEM_WB{
 
 struct retired_Res{
     uint64_t pc = 0;
+
+    FUType   fu_type = FUType::NONE;
 
     Exception exc     = Exception::NONE;
     uint64_t  exc_val = 0;

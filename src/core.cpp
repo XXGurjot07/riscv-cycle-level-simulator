@@ -48,12 +48,8 @@ bool Core::tick() {
     reg_ID_EX    n_id_ex  = decode_.evaluate(regs_, if_id_);
     reg_IF_ID    n_if_id  = fetch_.evaluate(mem_, pc_);
 
-    // backend clock edge these stages always advance
-    mem_wb_  = n_mem_wb;
-    ex_mem_  = ex.reg;
-
     // control: redirect, ex_stall, hazard detect
-    bool redirect = ex_mem_.valid && ex_mem_.redirect;
+    bool redirect = ex.reg.valid && ex.reg.redirect;
     bool ex_stall = !ex.accepted;
     bool scoreboard_stall = false;
         
@@ -61,9 +57,13 @@ bool Core::tick() {
     bool haz_raw_d2   = hazard_raw_d2(n_id_ex, ex_mem_);
     bool haz_load_use = hazard_load_use(n_id_ex, id_ex_);
 
+    // backend clock edge these stages always advance
+    mem_wb_  = n_mem_wb;
+    ex_mem_  = ex.reg;
+
     // advanced decode - issue logic
     // we can't forward if the register is being written to by an inflight instruction
-    scoreboard_update(id_ex_, ex, ret_result);
+    scoreboard_update(ex, ret_result);
 
     scoreboard_stall = n_id_ex.valid &&
         ((scoreboard_op_in_flight_[n_id_ex.deco_inst.rs1] && n_id_ex.deco_inst.reads_rs1) ||
@@ -76,10 +76,12 @@ bool Core::tick() {
         id_ex_ = {};
         if_id_ = {};
 
-        pc_ = ex_mem_.redirect_target;
+        pc_ = ex.reg.redirect_target;
+
+        execute_.flush();
 
         // bubble cause - jump or branch
-        Bubble_Why why = (ex_mem_.fu_type == FUType::SYSTEM) ? FENCE_I : BRANCH_MISPREDICT;
+        Bubble_Why why = (ex.reg.fu_type == FUType::SYSTEM) ? FENCE_I : BRANCH_MISPREDICT;
         id_ex_.why = why;
         if_id_.why = why;
     }
@@ -147,10 +149,10 @@ void Core::scoreboard_update(const reg_EX_Ports& ex, const retired_Res& ret_resu
     set_rd = (is_mul_div && ex.accepted && id_ex_.valid && id_ex_.deco_inst.writes_rd && id_ex_.exc == Exception::NONE) ? id_ex_.deco_inst.rd : 0;
 
     if(cfg_.forwarding){
-        clr_rd = (ex_mem_.valid && ex_mem_.writes_rd) ? ex_mem_.rd : 0;
+        clr_rd = (ex_mem_.valid && ex_mem_.writes_rd && (ex_mem_.fu_type == FUType::MUL || ex_mem_.fu_type == FUType::DIV)) ? ex_mem_.rd : 0;
     }
     else{
-        clr_rd = (ret_result.retired && ret_result.writes_rd) ? ret_result.rd : 0;
+        clr_rd = (ret_result.retired && ret_result.writes_rd && (ret_result.fu_type == FUType::MUL || ret_result.fu_type == FUType::DIV)) ? ret_result.rd : 0;
     }
 
     if(set_rd != 0){

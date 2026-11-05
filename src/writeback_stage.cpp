@@ -6,6 +6,7 @@ retired_Res WritebackStage :: evaluate(arch_state& reg_file, const reg_MEM_WB& m
 
     // This is for reporting to core
     reg.pc        = mem_wb_reg.pc;
+    reg.fu_type  = mem_wb_reg.fu_type;
 
     reg.writes_rd = mem_wb_reg.writes_rd;
     reg.rd        = mem_wb_reg.rd;

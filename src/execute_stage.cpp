@@ -346,9 +346,13 @@ reg_EX_MEM ExecuteStage :: build(const reg_ID_EX& id_ex_reg, ComputeFn compute) 
 }
 
 void ExecuteStage :: flush(){
+
+    last_pop_ = -1;
+
     alu_.unit.flush();
     agu_.unit.flush();
     bru_.unit.flush();
+
     mul_.unit.flush();
     div_.unit.flush();
 }
@@ -359,24 +363,41 @@ ExecuteStage :: ExecuteStage(int mul_latency, bool mul_pipelined, int div_latenc
 reg_EX_Ports ExecuteStage :: evaluate(const reg_ID_EX& id_ex_reg){
     reg_EX_Ports reg;
     reg_EX_MEM   completed_reg;
-    reg.accepted = false;
+    
+    reg.accepted    = false;
+    bool can_accept = false;
+    int latency_this_op = 1;
 
     // default output if nothing pops: blame EX if it held a valid inst, else pass the upstream tag
     completed_reg.why = id_ex_reg.valid ? Bubble_Why::EX_BUSY : id_ex_reg.why;
+    FU_Lane& lane = unit_for(id_ex_reg);
+
+    last_pop_ = std::max(-1, last_pop_ - 1);
 
     // bubble in, yes accepted and bubble out
     if(!id_ex_reg.valid){
         reg.accepted = true;
     }
 
-    // a valid in, can be accepted or not?
-    else if(all_idle()){
-        reg.accepted = true;
+    // a valid in, which FULane it requires, and if that FULane can accept, check if it will produce result in order
+    else {
+        can_accept = lane.unit.can_accept();
+        if(can_accept){
+            // we can only issue, the last pop > Latency of this op - 1
+            latency_this_op = lane.unit.latency();
+            if(latency_this_op - 1 > last_pop_){
+                reg.accepted = true;
+                reg_EX_MEM built = build(id_ex_reg, lane.compute);
+                lane.unit.issue(built);
 
-        FU_Lane&   lane  = unit_for(id_ex_reg);
-        reg_EX_MEM built = build(id_ex_reg, lane.compute);
-        
-        lane.unit.issue(built);
+                // update last_pop_ to the latency of this op
+                last_pop_ = latency_this_op - 1;
+            }
+        }
+        else {
+            // FULane is busy, cannot accept, stall
+            reg.accepted = false;
+        }
     }
 
     // tick now, so this cycles result can turn complete

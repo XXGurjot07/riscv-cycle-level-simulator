@@ -67,6 +67,8 @@ class FunctionalUnit{
             return p;
         }
 
+        int latency() const { return latency_; }
+
         void flush(){
             inflight_.clear();
         }
@@ -88,13 +90,16 @@ class ExecuteStage{
 
         // Addition of MUL and DIV units
         int  mul_latency_   = 3;     // Latency for MUL unit
-        int  div_latency_   = 10;    // Latency for DIV unit
         bool mul_pipelined_ = true;  // MUL unit is pipelined
+        int  div_latency_   = 10;    // Latency for DIV unit
         bool div_pipelined_ = false; // DIV unit is not pipelined
 
         FU_Lane mul_{{mul_latency_, mul_pipelined_}, do_mul};
         FU_Lane div_{{div_latency_, div_pipelined_}, do_div};
-    
+
+        // Addition of result reservation shift registor
+        int8_t last_pop_ = -1;
+
         bool       all_idle() const;
         FU_Lane&   unit_for(const reg_ID_EX& id_ex_reg);
         reg_EX_MEM build   (const reg_ID_EX& id_ex_reg, ComputeFn compute) const;

@@ -94,6 +94,7 @@ MemStage :: MemStage(uint64_t mem_size) : mem_size_(mem_size) {}
 reg_MEM_WB MemStage :: evaluate (uint8_t* mem, const reg_EX_MEM& ex_mem_reg){
 
     reg_MEM_WB reg;
+    reg.fu_type = ex_mem_reg.fu_type;
     FUType     futype = ex_mem_reg.fu_type;
     bool       is_mem = (futype == FUType::LOAD || futype == FUType::STORE);
 

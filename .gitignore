@@ -5,3 +5,4 @@
 *.log
 cosim_out/
 __pycache__/
+sim

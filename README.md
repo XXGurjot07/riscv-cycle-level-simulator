@@ -1,68 +1,94 @@
 # rv64-cycle-level-performance-simulator
 
+A cycle-level C++ model of a 5-stage in-order RV64IM pipeline, written from scratch.
+
 Gurjot Singh
 
-A cycle-level C++ model of a 5-stage in-order RV64I pipeline, written from scratch.
-It is the first step of a full roadmap: forwarding and MFAD extensions, then caches,
-then multi-core with coherence, then out-of-order cores.
-
-## Status (`v1.0-stall-only`)
-- IF / ID / EX / MEM / WB with double-buffered latches; precise traps taken at writeback.
-- RAW hazards are resolved by stalling: no forwarding, branch prediction or caches yet.
-- Branches, jumps and `fence.i` resolve in EX and flush the two younger stages.
-- EX is built from functional-unit lanes (ALU, BRU, AGU) with configurable latency.
-- A CPI stack built from tagged bubbles that are counted at writeback, so every cycle is accounted for.
-- Memory map matches Spike Simulator: 64 KB of RAM at `0x80000000`.
-
-## Build
-```bash
-make            # simulator     (g++, C++17)
-make programs   # test programs (riscv64-unknown-elf-gcc on PATH)
-make spike      # same program on Spike, with its commit log
-```
-On Windows without `make`:
-```bash
-g++ -std=c++17 -O2 -Wall -Wextra -Wshadow -Iinclude src/*.cpp -o sim
-```
-
-## Run (from the repo root)
-```bash
-./sim                              # runs programs/prog.elf
-./sim path/to/test.elf -quiet      # no commit log, only the summary and CPI stack
-```
-
-| option | meaning |
-|---|---|
-| `-quiet` | turn off the per-instruction commit log |
-| `-maxcycl=N` | cycle limit (default 1M) |
-| `-memsize=N` | simulated RAM in bytes (default 64 KB) |
-| `-forwarding`, `-mul-lat=N`, `-mul-pipe`, `-div-lat=N`, `-div-pipe` | reserved for the next version |
-
-Exit code: 0 = halted on a trap (`ebreak` ends a program), 1 = cycle limit reached, 2 = ELF failed to load.
-
-## Output
-The commit log has one line per retired instruction: `cycle  pc  rd  value`.
-The run ends with a CPI stack. CPI is cycles per retired instruction (lower is better).
-Each row is the number of cycles that went to one cause:
-
-## How it works
-- **One `tick()` = one clock edge.** WB runs first (write-first register file),
-  then MEM, EX, ID and IF compute their next latch values from the current ones.
-  The core then commits them under one priority chain: redirect > EX busy > RAW stall > advance.
-- **Bubbles carry a cause.** Every pipeline latch has a `why` tag next to `valid`. A bubble is
-  tagged where it is created (a RAW stall, a flush, EX busy) and copied by every stage.
-  Only writeback counts it, so flushed and wrong-path work is never counted, and
+## Features
+- IF / ID / EX / MEM / WB with double-buffered latches; one `tick()` = one clock edge.
+- **RV64IM**: integer base plus multiply/divide, including all the M-extension edge cases.
+- **Forwarding** (EX/MEM and MEM/WB bypass, 1-cycle load-use stall) or stall-only mode.
+- **Multi-cycle EX**: functional-unit lanes (ALU, BRU, AGU, MUL, DIV) with configurable
+  latency and pipelining, a **scoreboard** for MUL/DIV results, and a **result shift register**
+  so results still complete in order while independent instructions overlap.
+- **CPI stack**: every bubble carries its cause and is counted at writeback, so
   `retired + trap + bubbles == cycles` always holds.
+- **Lockstep cosim** with Spike's commit log (`tools/cosim.py`).
+
+## Requirements
+- `g++` with C++17
+- `riscv64-unknown-elf-gcc` (with an `rv64im` / `lp64` multilib)
+- `spike` and `python3` for `make check`
+
+## Build and run
+```bash
+make                 # build the simulator  -> ./sim
+make programs        # build programs/benchmark.elf
+make check           # cosim against Spike, stall-only and forwarding
+make run ARGS="-quiet -forwarding"
+```
+
+```bash
+./sim                              # runs programs/benchmark.elf
+./sim path/to/prog.elf -quiet      # summary and CPI stack only
+```
+
+| option | meaning | default |
+|---|---|---|
+| `-quiet` | no per-instruction commit log | off |
+| `-forwarding` | enable the bypass network | off (stall-only) |
+| `-mul-lat=N`, `-div-lat=N` | MUL / DIV latency in cycles | 3 / 10 |
+| `-mul-pipe`, `-div-pipe` | unit accepts a new op every cycle | MUL yes / DIV no |
+| `-maxcycl=N` | cycle limit | 1M |
+| `-memsize=N` | RAM in bytes | 64 KB |
+| `-cosim` | print Spike-format commit lines (used by `cosim.py`) | off |
+
+**Exit code:** the value `main` returns (it is passed out through `tohost`), or 2 if the ELF fails to load.
+A trap or the cycle limit currently also exits with 0, so rely on `make check` for pass or fail.
+
+## Benchmark
+`programs/benchmark.cpp` is self-checking: `main` returns 0, or N if kernel N gave the wrong checksum.
+Each kernel targets one CPI-stack bucket:
+
+| # | kernel | stresses |
+|---|---|---|
+| 1 | pointer_chase | load-use |
+| 2–3 | insertion_sort, binary_search | branch flushes |
+| 4 | crc32 | ALU dependency chains (forwarding) |
+| 5 | fib | calls, returns, stack traffic |
+| 6 | mem | every load/store width |
+| 7 | mul_chain | dependent MUL chain |
+| 8 | matmul | back-to-back independent MULs (pipelining) |
+| 9 | mul_high | `mulh` / `mulhu` / `mulhsu` / `mulw` |
+| 10 | div | dependent DIV/REM on the non-pipelined divider |
+| 11 | muldiv_edges | divide by zero, INT_MIN / −1, sign mixes |
+
+Kernels 7–11 are built only with `ISA = rv64im` (set at the top of the `Makefile`).
+To regenerate the expected checksums: `g++ -DHOST -O1 programs/benchmark.cpp -o ref && ./ref`.
+
+| mode | cycles | CPI |
+|---|---|---|
+| stall-only | 685,042 | 2.561 |
+| forwarding | 449,254 | 1.679 |
 
 ## Layout
 | path | contents |
 |---|---|
-| `include/definitions_*.hpp` | ISA enums, architectural state, pipeline latches and bubble tags |
-| `include/config.hpp`, `src/config.cpp` | `SimConfig` (run-time options), argument parsing, stats printing |
-| `src/core.cpp` | `Core`: the cycle loop (commit, evaluate, control, clock edge) |
+| `src/core.cpp` | the cycle loop: commit, evaluate, hazards and scoreboard, clock edge |
 | `src/{fetch,decode,execute,memory,writeback}_stage.cpp` | one class per stage |
-| `include/execute_stage.hpp` | `FunctionalUnit<T>` latency/occupancy model and the EX lanes |
-| `src/hazard_unit.cpp` | RAW hazard detection |
-| `src/logging.cpp` | commit log, trap and bubble-cause names |
-| `include/elf64_loader.hpp` | loads ELF64 RISC-V programs into simulated memory |
-| `programs/` | bare-metal test program (`start.S`, `link.ld`, `prog.cpp`) |
+| `include/execute_stage.hpp` | `FunctionalUnit<T>` latency model and the EX lanes |
+| `src/hazard_unit.cpp` | RAW / load-use detection and the forwarding muxes |
+| `include/definitions_*.hpp` | ISA enums, architectural state, pipeline latches, bubble tags |
+| `src/config.cpp` | command-line options and the CPI stack printout |
+| `programs/` | `start.S`, `link.ld`, `benchmark.cpp` (Spike memory map: RAM at `0x80000000`) |
+| `tools/cosim.py` | lockstep commit-log comparison against Spike |
+
+## Roadmap
+- [x] 5-stage in-order RV64I, stall-only
+- [x] Forwarding
+- [x] M extension, scoreboard, in-order completion
+- [ ] Branch prediction
+- [ ] CSRs and traps
+- [ ] Caches
+- [ ] Multi-core with coherence
+- [ ] Out-of-order core
