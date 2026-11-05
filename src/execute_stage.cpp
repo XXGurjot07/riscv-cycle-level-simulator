@@ -166,13 +166,84 @@ FU_Output do_agu(const FU_Input& fu_in){
     return result;
 } 
 
+FU_Output do_mul(const FU_Input& fu_in){
+    FU_Output result;
+
+    Op op = fu_in.deco_inst.op;
+    
+    int64_t  a_signed   = int64_t(fu_in.a_data);
+    uint64_t a_unsigned = fu_in.a_data;
+
+    int64_t  b_signed   = int64_t(fu_in.b_data);
+    uint64_t b_unsigned = fu_in.b_data;
+
+    uint64_t rd_data = 0;
+
+    switch (op){
+        default        :{ rd_data = 0; break;}
+
+        case Op::MUL   :{ rd_data = a_unsigned * b_unsigned; break;}
+
+        case Op::MULH  :{ rd_data = (uint64_t)(((int128_t)a_signed    * (int128_t)b_signed)    >> 64); break;}
+        case Op::MULHSU:{ rd_data = (uint64_t)(((int128_t)a_signed    * (int128_t)b_unsigned)  >> 64); break;}
+        case Op::MULHU :{ rd_data = (uint64_t)(((uint128_t)a_unsigned * (uint128_t)b_unsigned) >> 64); break;}
+
+        case Op::MULW  :{ rd_data = sext32(a_unsigned * b_unsigned); break;}
+    }
+
+    result.rd_data = rd_data;
+    return result;
+}
+
+FU_Output do_div(const FU_Input& fu_in){
+    FU_Output result;
+
+    Op op = fu_in.deco_inst.op;
+    
+    int64_t  a_signed   = int64_t(fu_in.a_data);
+    uint64_t a_unsigned = fu_in.a_data;
+
+    int64_t  b_signed   = int64_t(fu_in.b_data);
+    uint64_t b_unsigned = fu_in.b_data;
+
+    uint64_t rd_data = 0;
+
+    // To prevent x86 from trapping on div or rem word by zero 
+    int32_t  a32  = int32_t(a_unsigned);  
+    int32_t  b32  = int32_t(b_unsigned);
+    uint32_t ua32 = uint32_t(a_unsigned); 
+    uint32_t ub32 = uint32_t(b_unsigned);
+
+    switch (op){
+        default        :{ rd_data = 0; break;}
+
+        case Op::DIV   :{ rd_data = (b_signed == 0)   ? -1         : ((a_signed == INT64_MIN && b_signed == -1) ? INT64_MIN : a_signed / b_signed); break;}
+        case Op::DIVU  :{ rd_data = (b_unsigned == 0) ? UINT64_MAX : a_unsigned / b_unsigned; break;}
+        
+        case Op::DIVW  :{ rd_data = (b32 == 0)  ? sext32(-1)         : ((a32 == INT32_MIN && b32 == -1) ? sext32(INT32_MIN) : sext32(a32 / b32)); break;}
+        case Op::DIVUW :{ rd_data = (ub32 == 0) ? sext32(UINT32_MAX) : sext32(ua32 / ub32); break;}
+    
+        case Op::REM   :{ rd_data = (b_signed == 0)   ? a_signed   : ((a_signed == INT64_MIN && b_signed == -1) ? 0 : a_signed % b_signed); break;}
+        case Op::REMU  :{ rd_data = (b_unsigned == 0) ? a_unsigned : a_unsigned % b_unsigned; break;}
+        
+        case Op::REMW  :{ rd_data = (b32 == 0)  ? sext32(a32)  : ((a32 == INT32_MIN && b32 == -1) ? 0 : sext32(a32 % b32)); break;}
+        case Op::REMUW :{ rd_data = (ub32 == 0) ? sext32(ua32) : sext32(ua32 % ub32); break;}
+    
+    }
+
+    result.rd_data = rd_data;
+    return result;
+}
 
 bool ExecuteStage :: all_idle() const {
     bool alu = alu_.unit.idle();
     bool agu = agu_.unit.idle();
     bool bru = bru_.unit.idle();
 
-    return (alu && agu && bru);
+    bool mul = mul_.unit.idle();
+    bool div = div_.unit.idle();
+
+    return (alu && agu && bru && mul && div);
 }
 
 FU_Lane& ExecuteStage :: unit_for(const reg_ID_EX& id_ex_reg){
@@ -186,6 +257,8 @@ FU_Lane& ExecuteStage :: unit_for(const reg_ID_EX& id_ex_reg){
         case FUType::NONE  :
         case FUType::SYSTEM: 
         case FUType::ALU   : return alu_;
+        case FUType::MUL   : return mul_;
+        case FUType::DIV   : return div_;
         case FUType::LOAD  : 
         case FUType::STORE : return agu_;
         case FUType::BRANCH:
@@ -276,7 +349,12 @@ void ExecuteStage :: flush(){
     alu_.unit.flush();
     agu_.unit.flush();
     bru_.unit.flush();
+    mul_.unit.flush();
+    div_.unit.flush();
 }
+
+ExecuteStage :: ExecuteStage(int mul_latency, bool mul_pipelined, int div_latency, bool div_pipelined) : 
+    mul_latency_(mul_latency), mul_pipelined_(mul_pipelined), div_latency_(div_latency), div_pipelined_(div_pipelined) {}
 
 reg_EX_Ports ExecuteStage :: evaluate(const reg_ID_EX& id_ex_reg){
     reg_EX_Ports reg;
@@ -306,15 +384,24 @@ reg_EX_Ports ExecuteStage :: evaluate(const reg_ID_EX& id_ex_reg){
     agu_.unit.tick();
     bru_.unit.tick();
 
+    // M extension units tick
+    mul_.unit.tick();
+    div_.unit.tick();
+
     // check for any completed instructions
     bool alu_r = alu_.unit.has_result();
     bool agu_r = agu_.unit.has_result();
     bool bru_r = bru_.unit.has_result();
 
+    bool mul_r = mul_.unit.has_result();
+    bool div_r = div_.unit.has_result();
+
     // only 1 can complete in this inorder ver
     if     (alu_r) completed_reg = alu_.unit.pop();
     else if(agu_r) completed_reg = agu_.unit.pop();
     else if(bru_r) completed_reg = bru_.unit.pop();
+    else if(mul_r) completed_reg = mul_.unit.pop();
+    else if(div_r) completed_reg = div_.unit.pop();
 
     reg.reg = completed_reg;
 

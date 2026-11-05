@@ -56,11 +56,12 @@ SimConfig parse_args(int argc, char** argv){
 const char* why_name(Bubble_Why w){
     switch(w){
         case FILL              : return "Fill";
-        case RAW               : return "RAW Stall";
+        case RAW               : return "RAW ALU Stall";
+        case RAW_MULDIV        : return "RAW MUL/DIV Stall";
         case LOAD_USE          : return "Load-Use";
         case BRANCH_MISPREDICT : return "Branch/Jump Flush";
         case FENCE_I           : return "Fence.i Flush";
-        case EX_BUSY           : return "EX Busy";
+        case EX_BUSY           : return "Execute Busy";
         default                : return "?";
     }
 }

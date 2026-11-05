@@ -56,4 +56,25 @@ bool hazard_load_use(const reg_ID_EX& new_id_ex, const reg_ID_EX& id_ex){
     return needs;    
 }
 
+// forward operands
+
+void forward_operands(reg_ID_EX& id_ex_, const reg_EX_MEM& ex_mem_, const reg_MEM_WB& mem_wb_){
+
+    // forward path for rs1
+    if(ex_mem_.valid && ex_mem_.writes_rd && (ex_mem_.rd != 0) && id_ex_.deco_inst.reads_rs1 && (id_ex_.deco_inst.rs1 == ex_mem_.rd)){
+        id_ex_.rs1_data = ex_mem_.rd_data;
+    }
+    else if(mem_wb_.valid && mem_wb_.writes_rd && (mem_wb_.rd != 0) && id_ex_.deco_inst.reads_rs1 && (id_ex_.deco_inst.rs1 == mem_wb_.rd)){
+        id_ex_.rs1_data = mem_wb_.rd_data;
+    }
+
+    // forward path for rs2
+    if(ex_mem_.valid && ex_mem_.writes_rd && (ex_mem_.rd != 0) && id_ex_.deco_inst.reads_rs2 && (id_ex_.deco_inst.rs2 == ex_mem_.rd)){
+        id_ex_.rs2_data = ex_mem_.rd_data;
+    }
+    else if(mem_wb_.valid && mem_wb_.writes_rd && (mem_wb_.rd != 0) && id_ex_.deco_inst.reads_rs2 && (id_ex_.deco_inst.rs2 == mem_wb_.rd)){
+        id_ex_.rs2_data = mem_wb_.rd_data;
+    }
+}
+
 // hazards control flow

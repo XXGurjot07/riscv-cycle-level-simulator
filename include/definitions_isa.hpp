@@ -8,6 +8,9 @@ enum class FUType : uint8_t{NONE, ALU, MUL, DIV, BRANCH, JUMP, LOAD, STORE, SYST
 enum class Format : uint8_t{None, R, I, S, B, U, J};
 
 enum class Op : uint8_t {
+    // Default
+    ILLEGAL, NOP,
+
     // Loads
     LD, LW, LWU, LH, LHU, LB, LBU,
 
@@ -23,25 +26,25 @@ enum class Op : uint8_t {
     // R-Type
     ADD, ADDW, SLT, SLTU, AND, OR, XOR, SLL, SLLW, SRL, SRLW, SUB, SUBW, SRA, SRAW,
 
-    // Multiply / Divide
-    MUL, MULW, MULH, MULHU, MULHSU, DIV, DIVW, REM, REMW,
-
     // Control Flow
     JAL, JALR, BEQ, BNE, BLT, BLTU, BGE, BGEU,
 
-    // NOP & Misc Markers
-    NOP, COMPRESSED,
+    // Markers
+    COMPRESSED,
+
+    // System & Miscellaneous
+    FENCE, FENCE_I, ECALL, EBREAK, 
 
     // CSRs
     CSRRW, CSRRS, CSRRC, CSRRWI, CSRRSI, CSRRCI,
 
+    // M Extension Integer Multiply/Divide
+    MUL, MULH, MULHU, MULHSU, MULW, DIV, DIVU, DIVW, DIVUW, REM, REMU, REMW, REMUW,
+
     // Atomics (AMO, LR-SC)
     AMO_LR_D, AMO_LR_W, AMO_SC_D, AMO_SC_W, AMO_SWAP_D, AMO_SWAP_W, AMO_ADD_D, AMO_ADD_W, 
     AMO_AND_D, AMO_AND_W, AMO_OR_D, AMO_OR_W, AMO_XOR_D, AMO_XOR_W, AMO_MIN_D, AMO_MIN_W, 
-    AMO_MIN_WU, AMO_MAX_D, AMO_MAX_W, AMO_MAX_WU,
-
-    // System & Miscellaneous
-    FENCE, FENCE_I, ECALL, EBREAK, ILLEGAL
+    AMO_MIN_WU, AMO_MAX_D, AMO_MAX_W, AMO_MAX_WU
 };
 
 enum class Exception : uint8_t {

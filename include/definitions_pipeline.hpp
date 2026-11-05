@@ -13,6 +13,7 @@ enum Bubble_Why : int {
     BRANCH_MISPREDICT,  // 2
     FENCE_I,            // 2
     EX_BUSY,            // X (variable)
+    RAW_MULDIV,         // variable
     NWHY                // 0
 };
 

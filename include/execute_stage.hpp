@@ -3,11 +3,16 @@
 #include "definitions_isa.hpp"
 #include "definitions_pipeline.hpp"
 
+using int128_t  = __int128;
+using uint128_t = unsigned __int128;
+
 // ALU, BRU, AGU, MUL/DIV
 FU_Output do_alu(const FU_Input& fu_in);
 FU_Output do_bru(const FU_Input& fu_in);
 FU_Output do_agu(const FU_Input& fu_in);
-FU_Output do_mul_div(const FU_Input& fu_in);
+
+FU_Output do_mul(const FU_Input& fu_in);
+FU_Output do_div(const FU_Input& fu_in);
 
 // FUnit : houses a EX Type and Occupancy Rules (Latency & Pipelined)
 template <typename payload>
@@ -71,7 +76,7 @@ class FunctionalUnit{
 using ComputeFn = FU_Output (*)(const FU_Input&);
 
 struct FU_Lane{
-    FunctionalUnit<reg_EX_MEM> unit;   // timing, your class
+    FunctionalUnit<reg_EX_MEM> unit;   // timing, our functional class
     ComputeFn compute;                 // which combinational block this lane uses   
 };
 
@@ -80,12 +85,23 @@ class ExecuteStage{
         FU_Lane alu_{{1, true}, do_alu};
         FU_Lane bru_{{1, true}, do_bru};
         FU_Lane agu_{{1, true}, do_agu};
+
+        // Addition of MUL and DIV units
+        int  mul_latency_   = 3;     // Latency for MUL unit
+        int  div_latency_   = 10;    // Latency for DIV unit
+        bool mul_pipelined_ = true;  // MUL unit is pipelined
+        bool div_pipelined_ = false; // DIV unit is not pipelined
+
+        FU_Lane mul_{{mul_latency_, mul_pipelined_}, do_mul};
+        FU_Lane div_{{div_latency_, div_pipelined_}, do_div};
     
         bool       all_idle() const;
         FU_Lane&   unit_for(const reg_ID_EX& id_ex_reg);
         reg_EX_MEM build   (const reg_ID_EX& id_ex_reg, ComputeFn compute) const;
 
     public : 
+        ExecuteStage(int mul_latency, bool mul_pipelined, int div_latency, bool div_pipelined);
+
         reg_EX_Ports evaluate(const reg_ID_EX& id_ex_reg);    // this is called once per cycle
         void flush();          
 };

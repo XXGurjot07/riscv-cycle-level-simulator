@@ -4,6 +4,8 @@
 #include "definitions_isa.hpp"
 #include "definitions_pipeline.hpp"
 
+// Version 0.4 - Added Support for M Extension Integer Multiply/Divide
+
 // Function Declarations
 Decoded_Inst do_decode(uint32_t instruction);
 

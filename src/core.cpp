@@ -4,7 +4,7 @@
 
 // core initializer list
 Core::Core(uint8_t* mem, uint64_t entry_pc, const SimConfig& cfg, uint64_t to_host) : cfg_(cfg), mem_(mem), 
-    pc_(entry_pc), to_host_(to_host), fetch_(cfg.MEM_SIZE), memstage_(cfg.MEM_SIZE) {}    
+    pc_(entry_pc), to_host_(to_host), fetch_(cfg.MEM_SIZE), execute_(cfg.mul_latency, cfg.mul_pipelined, cfg.div_latency, cfg.div_pipelined), memstage_(cfg.MEM_SIZE) {}    
 
 bool Core::tick() {
     
@@ -48,17 +48,27 @@ bool Core::tick() {
     reg_ID_EX    n_id_ex  = decode_.evaluate(regs_, if_id_);
     reg_IF_ID    n_if_id  = fetch_.evaluate(mem_, pc_);
 
+    // backend clock edge these stages always advance
+    mem_wb_  = n_mem_wb;
+    ex_mem_  = ex.reg;
+
     // control: redirect, ex_stall, hazard detect
-    bool redirect = ex.reg.valid && ex.reg.redirect;
+    bool redirect = ex_mem_.valid && ex_mem_.redirect;
     bool ex_stall = !ex.accepted;
+    bool scoreboard_stall = false;
         
     bool haz_raw_d1   = hazard_raw_d1(n_id_ex, id_ex_);
     bool haz_raw_d2   = hazard_raw_d2(n_id_ex, ex_mem_);
     bool haz_load_use = hazard_load_use(n_id_ex, id_ex_);
 
-    // backend clock edge these stages always advance
-    mem_wb_  = n_mem_wb;
-    ex_mem_  = ex.reg;
+    // advanced decode - issue logic
+    // we can't forward if the register is being written to by an inflight instruction
+    scoreboard_update(id_ex_, ex, ret_result);
+
+    scoreboard_stall = n_id_ex.valid &&
+        ((scoreboard_op_in_flight_[n_id_ex.deco_inst.rs1] && n_id_ex.deco_inst.reads_rs1) ||
+         (scoreboard_op_in_flight_[n_id_ex.deco_inst.rs2] && n_id_ex.deco_inst.reads_rs2) ||
+         (scoreboard_op_in_flight_[n_id_ex.deco_inst.rd]  && n_id_ex.deco_inst.writes_rd));
 
     // frontend may need to flush or stall
     if(redirect){
@@ -66,10 +76,10 @@ bool Core::tick() {
         id_ex_ = {};
         if_id_ = {};
 
-        pc_ = ex.reg.redirect_target;
+        pc_ = ex_mem_.redirect_target;
 
         // bubble cause - jump or branch
-        Bubble_Why why = (ex.reg.fu_type == FUType::SYSTEM) ? FENCE_I : BRANCH_MISPREDICT;
+        Bubble_Why why = (ex_mem_.fu_type == FUType::SYSTEM) ? FENCE_I : BRANCH_MISPREDICT;
         id_ex_.why = why;
         if_id_.why = why;
     }
@@ -78,10 +88,15 @@ bool Core::tick() {
 
         // bubble cause - nop from ex
     }
+    else if(scoreboard_stall){
+        // dont advance pc, but put bubble into the current cycle decoded register
+        id_ex_ = {};
+        
+        // bubble cause - nop from ex
+        id_ex_.why = RAW_MULDIV;
+    }
     else if(haz_raw_d1 || haz_raw_d2 || haz_load_use){
         if(cfg_.forwarding){
-        
-            // forwarding logic 
             // load use stall is 1 bubble and done advance pc
             if(haz_load_use){
                 id_ex_ = {};
@@ -90,26 +105,9 @@ bool Core::tick() {
                 id_ex_.why = Bubble_Why :: LOAD_USE;
             }
             else{
-
                 id_ex_ = n_id_ex;
                 if_id_ = n_if_id;
                 pc_ += 4;
-
-                // forward path for rs1
-                if(haz_raw_d1 && id_ex_.deco_inst.rs1 == ex_mem_.rd){
-                    id_ex_.rs1_data = ex_mem_.rd_data;
-                }
-                else if(haz_raw_d2 && id_ex_.deco_inst.rs1 == mem_wb_.rd){
-                    id_ex_.rs1_data = mem_wb_.rd_data;
-                }
-
-                // forward path for rs2
-                if(haz_raw_d1 && id_ex_.deco_inst.rs2 == ex_mem_.rd){
-                    id_ex_.rs2_data = ex_mem_.rd_data;
-                }
-                else if(haz_raw_d2 && id_ex_.deco_inst.rs2 == mem_wb_.rd){
-                    id_ex_.rs2_data = mem_wb_.rd_data;
-                }
             }
         }
         else{
@@ -126,11 +124,41 @@ bool Core::tick() {
         pc_ += 4;    
     }
 
+    if(cfg_.forwarding){
+        forward_operands(id_ex_, ex_mem_, mem_wb_);
+    }
+
     stats_.cycles++;
     return true;
 }    
 
 void Core::run() {
     while (stats_.cycles < cfg_.MAX_CYCLES && tick()){
+    }
+}
+
+void Core::scoreboard_update(const reg_EX_Ports& ex, const retired_Res& ret_result){
+    // if the instruction is accepted into EX, we can set the scoreboard for the destination register
+    uint8_t set_rd = 0;
+    uint8_t clr_rd = 0;
+
+    bool is_mul_div = id_ex_.deco_inst.fu_type == FUType::MUL || id_ex_.deco_inst.fu_type == FUType::DIV;
+
+    set_rd = (is_mul_div && ex.accepted && id_ex_.valid && id_ex_.deco_inst.writes_rd && id_ex_.exc == Exception::NONE) ? id_ex_.deco_inst.rd : 0;
+
+    if(cfg_.forwarding){
+        clr_rd = (ex_mem_.valid && ex_mem_.writes_rd) ? ex_mem_.rd : 0;
+    }
+    else{
+        clr_rd = (ret_result.retired && ret_result.writes_rd) ? ret_result.rd : 0;
+    }
+
+    if(set_rd != 0){
+        scoreboard_op_in_flight_[set_rd] = true;
+    }
+
+    // if the instruction can be forwarded, we can clear the scoreboard
+    if(clr_rd != 0){
+        scoreboard_op_in_flight_[clr_rd] = false;
     }
 }

@@ -9,7 +9,7 @@ constexpr uint64_t MEM_BASE = 0x80000000;   // Spike ISA Mem Base
 
 // default core configs
 struct SimConfig {
-    const char* benchmark_elf = "programs/prog.elf";
+    const char* benchmark_elf = "programs/benchmark.elf";
 
     bool log_on     = true;
     bool cosim      = false;

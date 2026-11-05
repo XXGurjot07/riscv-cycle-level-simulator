@@ -35,6 +35,10 @@ class Core{
         ExecuteStage   execute_;
         MemStage       memstage_;
         WritebackStage writeback_;
+
+        // Advanced In-order Execute 
+        bool scoreboard_op_in_flight_[32] = {false};    // true if the register is being written to by an inflight instruction
+        void scoreboard_update(const reg_EX_Ports& ex, const retired_Res& ret_result);
         
         bool halted_ = false;
 

@@ -184,8 +184,20 @@ Decoded_Inst do_decode(uint32_t instruction){
 
             else if(funct7 != 0){ deco_inst.op = Op::ILLEGAL; }
 
-            deco_inst.format     = Format::R; 
-            deco_inst.fu_type    = FUType::ALU;
+            // Adding M extension here as a override for R-type, as they have same opcode
+            if(funct7 == 1){
+                static const Op t_m[8] = {Op::MUL, Op::MULH, Op::MULHSU, Op::MULHU, Op::DIV, Op::DIVU, Op::REM, Op::REMU};
+                deco_inst.op = t_m[funct3];
+
+                if(funct3 < 4) deco_inst.fu_type = FUType::MUL;
+                else           deco_inst.fu_type = FUType::DIV;
+
+            }
+            else{
+                deco_inst.fu_type = FUType::ALU;
+            }
+
+            deco_inst.format = Format::R;
 
             deco_inst.reads_rs1 = true;
             deco_inst.reads_rs2 = true;
@@ -210,8 +222,21 @@ Decoded_Inst do_decode(uint32_t instruction){
 
             else if(funct7 != 0){ deco_inst.op = Op::ILLEGAL; }
 
+            // Adding M word extension here as a override for R-type word, as they have same opcode
+            if(funct7 == 1){
+                static const Op t_m[8] = {Op::MULW, Op::ILLEGAL, Op::ILLEGAL, Op::ILLEGAL, Op::DIVW, Op::DIVUW, Op::REMW, Op::REMUW};
+                deco_inst.op = t_m[funct3];
+
+                if(funct3 == 0) deco_inst.fu_type = FUType::MUL;
+                else if(funct3 >= 4 && funct3 <= 7) deco_inst.fu_type = FUType::DIV;
+                else deco_inst.fu_type = FUType::ALU;
+
+            }
+            else{
+                deco_inst.fu_type = FUType::ALU;
+            }
+
             deco_inst.format     = Format::R; 
-            deco_inst.fu_type    = FUType::ALU;
 
             deco_inst.reads_rs1 = true;
             deco_inst.reads_rs2 = true;
